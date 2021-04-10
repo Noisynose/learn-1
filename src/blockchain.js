@@ -62,9 +62,26 @@ class Blockchain {
      * that this method is a private method. 
      */
     _addBlock(block) {
-        let self = this;
+        const self = this;
         return new Promise(async (resolve, reject) => {
-           
+            try {
+                const currentHeight = await self.getChainHeight();
+
+                self.height = currentHeight + 1;
+                if (self.height > 0) {
+                    const lastBlock = self.chain[currentHeight];
+                    block.previousBlockHash = lastBlock.hash;
+                }
+                block.time = new Date().getTime();
+                block.height = self.height;
+                block.hash = SHA256(`${JSON.stringify(block)}`).toString();
+    
+                self.chain.push(block);
+    
+                return resolve(block);
+            } catch (e) {
+                return reject('Error in add block');
+            }
         });
     }
 
@@ -78,7 +95,7 @@ class Blockchain {
      */
     requestMessageOwnershipVerification(address) {
         return new Promise((resolve) => {
-            
+            return resolve(`${address}:${new Date().getTime().toString().slice(0,-3)}:starRegistry`);
         });
     }
 
@@ -100,9 +117,25 @@ class Blockchain {
      * @param {*} star 
      */
     submitStar(address, message, signature, star) {
-        let self = this;
+        const self = this;
         return new Promise(async (resolve, reject) => {
-            
+            const [owner, timeFromMessage] = message.split(':');
+            const currentTime = parseInt(new Date().getTime().toString().slice(0, -3));
+            const hasFiveMinutesGoneBy = currentTime - timeFromMessage >= 300;
+
+            let verifiedByService = false;
+            try {
+                verifiedByService = bitcoinMessage.verify(message, address, signature);
+            } catch (e) {
+                return reject('Could not verify message');
+            }
+
+            if (hasFiveMinutesGoneBy || !verifiedByService ) {
+                return reject('Invalid message');
+            } else {
+                const blockToAdd = new BlockClass.Block({data: { owner, star }});
+                return resolve(this._addBlock(blockToAdd));
+            }
         });
     }
 
@@ -113,9 +146,15 @@ class Blockchain {
      * @param {*} hash 
      */
     getBlockByHash(hash) {
-        let self = this;
+        const self = this;
         return new Promise((resolve, reject) => {
-           
+            const blockFound = self.chain.find((item) => item.hash === hash);
+
+            if (blockFound) {
+                return resolve(blockFound);
+            } else {
+                return resolve(null);
+            }
         });
     }
 
@@ -143,10 +182,11 @@ class Blockchain {
      * @param {*} address 
      */
     getStarsByWalletAddress (address) {
-        let self = this;
-        let stars = [];
+        const self = this;
         return new Promise((resolve, reject) => {
-            
+            const stars = self.chain.map((block) => block.getBData()).filter((parsedBlock) => parsedBlock.owner === address);
+
+            return resolve(stars);
         });
     }
 
@@ -157,10 +197,18 @@ class Blockchain {
      * 2. Each Block should check the with the previousBlockHash
      */
     validateChain() {
-        let self = this;
-        let errorLog = [];
+        const self = this;
+        const errorLog = [];
         return new Promise(async (resolve, reject) => {
-            
+            let lastBlockHash = null;
+
+            self.chain.forEach((block) => {
+                if (!block.validate() || block.previousBlockHash !== lastBlockHash) {
+                    errorLog.push(`block ${block.height} is invalid`);
+                }
+
+                lastBlockHash = block.hash;
+            });
         });
     }
 
