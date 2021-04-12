@@ -39,8 +39,11 @@ class Block {
         const self = this;
         return new Promise((resolve, reject) => {
             const currentHash = self.hash;
+            self.hash = null;
 
             const newHash = SHA256(`${JSON.stringify(self)}`).toString();
+
+            self.hash = currentHash;
 
             return resolve(newHash === currentHash);
         });
@@ -61,8 +64,6 @@ class Block {
 
         // Decoding the data to retrieve the JSON representation of the object
         const parsedData = JSON.parse(hex2ascii(data));
-
-        console.log('hey', parsedData);
 
         // Resolve with the data if the object isn't the Genesis block
         if (parsedData.data !== 'Genesis Block') {

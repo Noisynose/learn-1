@@ -75,6 +75,12 @@ class Blockchain {
                 block.time = new Date().getTime();
                 block.height = self.height;
                 block.hash = SHA256(`${JSON.stringify(block)}`).toString();
+
+                const isChainValid = await self.validateChain();
+
+                if (isChainValid.length > 0) {
+                    throw new Error('Chain is invalid');
+                }
     
                 self.chain.push(block);
     
@@ -130,7 +136,7 @@ class Blockchain {
                 return reject('Could not verify message');
             }
 
-            if (hasFiveMinutesGoneBy || !verifiedByService ) {
+            if (hasFiveMinutesGoneBy || !verifiedByService) {
                 return reject('Invalid message');
             } else {
                 const blockToAdd = new BlockClass.Block({data: { owner, star }});
@@ -166,7 +172,7 @@ class Blockchain {
     getBlockByHeight(height) {
         let self = this;
         return new Promise((resolve, reject) => {
-            let block = self.chain.filter(p => p.height === height)[0];
+            let block = self.chain.find(p => p.height === height);
             if(block){
                 resolve(block);
             } else {
@@ -202,13 +208,16 @@ class Blockchain {
         return new Promise(async (resolve, reject) => {
             let lastBlockHash = null;
 
-            self.chain.forEach((block) => {
-                if (!block.validate() || block.previousBlockHash !== lastBlockHash) {
+            self.chain.forEach(async (block) => {
+                const isBlockValid = await block.validate();
+                if (!isBlockValid || block.previousBlockHash !== lastBlockHash) {
                     errorLog.push(`block ${block.height} is invalid`);
                 }
 
                 lastBlockHash = block.hash;
             });
+
+            return resolve(errorLog);
         });
     }
 
